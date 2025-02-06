@@ -257,7 +257,7 @@ Resources:
     Properties:
       LaunchTemplateData:
         IamInstanceProfile:
-          Arn: !GetAtt InstanceProfile.Arn  # ✅ FIXED: Correct reference
+          Arn: !GetAtt InstanceProfile.Arn  # There was an error here Maleesha
         ImageId: ami-04b4f1a9cf54c11d0
         InstanceType: t2.micro
         SecurityGroupIds:
@@ -272,14 +272,14 @@ Resources:
   ## FIXED AUTO SCALING GROUP ##
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: LaunchTemplate  # ✅ FIXED: Ensure LaunchTemplate exists first
+    DependsOn: LaunchTemplate  # Mali please check template again
     Properties:
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber  # ✅ FIXED: Correct version reference
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber  # I fixed the version issue
       MinSize: 1
       MaxSize: 3
       DesiredCapacity: 1
@@ -293,7 +293,7 @@ Resources:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref AutoScalingGroup
       ScalingAdjustment: 1  # Increase the number of instances by 1
-      Cooldown: 300  # Wait for 5 minutes before the next scaling action
+      Cooldown: 300  # 5 minutes before next scaling action
 
   # Scaling Policy - Scale Down
   ScaleDownPolicy:
@@ -304,7 +304,7 @@ Resources:
       ScalingAdjustment: -1  # Decrease the number of instances by 1
       Cooldown: 300  # Wait for 5 minutes before the next scaling action
 
-  # CloudWatch Alarm for Scale Up (when CPU utilization exceeds 75%)
+  # CloudWatch Alarm for Scale Up 
   CloudWatchAlarmScaleUp:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -322,7 +322,7 @@ Resources:
       AlarmActions:
         - !Ref ScaleUpPolicy
 
-  ## CLOUDWATCH MONITORING ##
+  # CLOUDWATCH MONITORING #
   CloudWatchAlarmEC2CPU:
     Type: AWS::CloudWatch::Alarm
     Properties:
