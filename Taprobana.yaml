@@ -249,12 +249,12 @@ Resources:
       VpcEndpointType: Gateway
       RouteTableIds:
         - !Ref RouteTablePrivate
+
   # Launch Configuration for Auto Scaling Group
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateName: ecom-prod-launch-template
-      VersionDescription: "v1"
       LaunchTemplateData:
         ImageId: ami-04b4f1a9cf54c11d0  # Update with the correct AMI ID
         InstanceType: t2.micro
@@ -323,6 +323,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       AlarmActions:
         - !Ref ScaleUpPolicy
+
   ## CLOUDWATCH MONITORING ##
   CloudWatchAlarmEC2CPU:
     Type: AWS::CloudWatch::Alarm
@@ -342,6 +343,7 @@ Resources:
         - !Ref SNSTopic
       OKActions:
         - !Ref SNSTopic
+
   # CloudWatch Alarm for Scale Down (when CPU utilization is below 30%)
   CloudWatchAlarmScaleDown:
     Type: AWS::CloudWatch::Alarm
