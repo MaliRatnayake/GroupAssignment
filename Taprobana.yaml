@@ -1,4 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
+# This is the final commit for proof
 
 Resources:
   VPC:
@@ -68,6 +69,7 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
+  # NAT Gateway for PublicSubnet1
   ElasticIPForNAT1:
     Type: AWS::EC2::EIP
     Properties:
@@ -82,6 +84,7 @@ Resources:
         - Key: Name
           Value: ecom-prod-nat-gateway-1
 
+  # NAT Gateway for PublicSubnet2
   ElasticIPForNAT2:
     Type: AWS::EC2::EIP
     Properties:
@@ -161,39 +164,6 @@ Resources:
     Properties:
       Roles:
         - !Ref IAMRoleForEC2
-
-  AutoScalingLaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateName: ecom-prod-launch-template
-      VersionDescription: "v1"
-      LaunchTemplateData:
-        ImageId: ami-04b4f1a9cf54c11d0
-        InstanceType: t2.micro
-        SecurityGroupIds:
-          - !Ref SecurityGroup
-        KeyName: ecom
-        IamInstanceProfile:
-          Arn: !GetAtt InstanceProfile.Arn
-        NetworkInterfaces:
-          - AssociatePublicIpAddress: true
-
-  AutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      LaunchTemplate:
-        LaunchTemplateName: !Ref AutoScalingLaunchTemplate
-        Version: "1"
-      MinSize: '2'
-      MaxSize: '4'
-      DesiredCapacity: '2'
-      TargetGroupARNs:
-        - !Ref ALBTargetGroup
-      HealthCheckType: EC2
-      HealthCheckGracePeriod: 300
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -279,7 +249,75 @@ Resources:
       VpcEndpointType: Gateway
       RouteTableIds:
         - !Ref RouteTablePrivate
+  # Launch Configuration for Auto Scaling Group
+  LaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: ami-04b4f1a9cf54c11d0  # Update with correct AMI ID
+      InstanceType: t2.micro
+      SecurityGroups:
+        - !Ref SecurityGroup
+      KeyName: ecom
+      IamInstanceProfile: !Ref InstanceProfile
+      UserData: !Base64 "your_base64_encoded_user_data"  # Optional: for instance configuration
 
+  # Auto Scaling Group
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: '2'  # Minimum number of instances
+      MaxSize: '5'  # Maximum number of instances
+      DesiredCapacity: '2'  # Initial desired capacity
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchConfigurationName: !Ref LaunchConfig
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 300  # Time to wait before considering an instance unhealthy
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup  # Associate with the ALB target group
+      Tags:
+        - Key: Name
+          Value: ecom-prod-auto-scaling-instance
+          PropagateAtLaunch: true
+
+  # Scaling Policy - Scale Up
+  ScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      ScalingAdjustment: 1  # Increase the number of instances by 1
+      Cooldown: 300  # Wait for 5 minutes before the next scaling action
+
+  # Scaling Policy - Scale Down
+  ScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      ScalingAdjustment: -1  # Decrease the number of instances by 1
+      Cooldown: 300  # Wait for 5 minutes before the next scaling action
+
+  # CloudWatch Alarm for Scale Up (when CPU utilization exceeds 75%)
+  CloudWatchAlarmScaleUp:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Triggers scale-up when CPU utilization exceeds 75%"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      Statistic: Average
+      Period: 300  # Check every 5 minutes
+      EvaluationPeriods: 1
+      Threshold: 75
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref ScaleUpPolicy
+
+  ## CLOUDWATCH MONITORING ##
   CloudWatchAlarmEC2CPU:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -298,6 +336,23 @@ Resources:
         - !Ref SNSTopic
       OKActions:
         - !Ref SNSTopic
+  # CloudWatch Alarm for Scale Down (when CPU utilization is below 30%)
+  CloudWatchAlarmScaleDown:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Triggers scale-down when CPU utilization is below 30%"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      Statistic: Average
+      Period: 300  # Check every 5 minutes
+      EvaluationPeriods: 1
+      Threshold: 30
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref ScaleDownPolicy
 
   CloudWatchAlarmALBRequests:
     Type: AWS::CloudWatch::Alarm
@@ -321,33 +376,19 @@ Resources:
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
-      DisplayName: Ecom Notifications
+      DisplayName: "Ecom Monitoring Alerts"
+
+  SNSTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SNSTopic
+      Protocol: email
+      Endpoint: "22ug2-0190M@sltc.edu.lk"
 
 Outputs:
-  VPCID:
-    Description: "VPC ID"
-    Value: !Ref VPC
-
-  PublicSubnet1ID:
-    Description: "Public Subnet 1 ID"
-    Value: !Ref PublicSubnet1
-
-  PublicSubnet2ID:
-    Description: "Public Subnet 2 ID"
-    Value: !Ref PublicSubnet2
-
-  PrivateSubnet1ID:
-    Description: "Private Subnet 1 ID"
-    Value: !Ref PrivateSubnet1
-
-  PrivateSubnet2ID:
-    Description: "Private Subnet 2 ID"
-    Value: !Ref PrivateSubnet2
-
   ALBURL:
-    Description: "URL of the ALB"
-    Value: !Sub "http://${ALB.DNSName}"
-
-  AutoScalingGroupName:
-    Description: "AutoScaling Group Name"
-    Value: !Ref AutoScalingGroup
+    Description: Application Load Balancer URL
+    Value: !GetAtt ALB.DNSName
+  DynamoDBTableName:
+    Description: Name of the DynamoDB Table
+    Value: ecom-prod-dynamodb
