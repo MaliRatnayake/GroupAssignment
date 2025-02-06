@@ -268,7 +268,7 @@ Resources:
   # Auto Scaling Group
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: LaunchTemplate  # Ensure the Launch Template is created first
+    DependsOn: [LaunchTemplate, ALB]  # Ensure the Launch Template and ALB are created first
     Properties:
       MinSize: '2'  # Minimum number of instances
       MaxSize: '5'  # Maximum number of instances
