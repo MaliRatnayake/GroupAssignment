@@ -175,6 +175,15 @@ Resources:
           ToPort: '443'
           CidrIp: 0.0.0.0/0
 
+  # SNS Topic for CloudWatch Alarm Actions
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "CloudWatch Alarm Notifications"
+      Subscription:
+        - Protocol: email
+          Endpoint: "22ug2-0190M@sltc.edu.lk"  # Replace with your email address
+
   # CloudWatch Alarm for ALB Requests
   CloudWatchAlarmALBRequests:
     Type: AWS::CloudWatch::Alarm
