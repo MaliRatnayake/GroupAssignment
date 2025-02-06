@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-# Test commit
+
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -68,72 +68,7 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
-  RouteTablePrivate:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: ecom-prod-private-route-table
-
-  RouteTableAssociationPrivate1:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet1
-      RouteTableId: !Ref RouteTablePrivate
-
-  RouteTableAssociationPrivate2:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref RouteTablePrivate
-
-  SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow HTTP and SSH
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          FromPort: -1
-          ToPort: -1
-          CidrIp: 0.0.0.0/0
-
-  IAMRoleForEC2:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: [ "ec2.amazonaws.com" ]
-            Action: [ "sts:AssumeRole" ]
-      Policies:
-        - PolicyName: DynamoDBAccess
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "dynamodb:*"
-                Resource: "*"
-
-  InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles:
-        - !Ref IAMRoleForEC2
-
+  # NAT Gateway for PublicSubnet1
   ElasticIPForNAT1:
     Type: AWS::EC2::EIP
     Properties:
@@ -148,6 +83,7 @@ Resources:
         - Key: Name
           Value: ecom-prod-nat-gateway-1
 
+  # NAT Gateway for PublicSubnet2
   ElasticIPForNAT2:
     Type: AWS::EC2::EIP
     Properties:
@@ -162,6 +98,29 @@ Resources:
         - Key: Name
           Value: ecom-prod-nat-gateway-2
 
+  # Route Table for PrivateSubnet1 to use NAT Gateway 1
+  RouteTablePrivateWithNAT1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: ecom-prod-private-route-table-with-nat-1
+
+  RoutePrivateSubnet1ToNAT:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTablePrivateWithNAT1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway1
+
+  RouteTableAssociationPrivateWithNAT1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref RouteTablePrivateWithNAT1
+
+  # Route Table for PrivateSubnet2 to use NAT Gateway 2
   RouteTablePrivateWithNAT2:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -170,12 +129,6 @@ Resources:
         - Key: Name
           Value: ecom-prod-private-route-table-with-nat-2
 
-  RouteTableAssociationPrivateWithNAT2:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref RouteTablePrivateWithNAT2
-
   RoutePrivateSubnet2ToNAT:
     Type: AWS::EC2::Route
     Properties:
@@ -183,13 +136,36 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NATGateway2
 
+  RouteTableAssociationPrivateWithNAT2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref RouteTablePrivateWithNAT2
+
+  # Fixed CloudWatch Alarm for ALB Requests
+  CloudWatchAlarmALBRequests:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Triggers when ALB request count exceeds 100,000 within 5 minutes"
+      Namespace: AWS/ApplicationELB
+      MetricName: RequestCount
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Sub "app/${ALB.LoadBalancerFullName}"
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 100000
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref SNSTopic
+      OKActions:
+        - !Ref SNSTopic
+
 Outputs:
   ALBURL:
     Description: Application Load Balancer URL
     Value: !GetAtt ALB.DNSName
-  DynamoDBTableName:
-    Description: Name of the DynamoDB Table
-    Value: ecom-prod-dynamodb
   EC2Instance1Id:
     Description: "Instance ID of EC2 Instance in Private Subnet 1"
     Value: !Ref EC2Instance1
