@@ -162,6 +162,39 @@ Resources:
       Roles:
         - !Ref IAMRoleForEC2
 
+  AutoScalingLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: ecom-prod-launch-template
+      VersionDescription: "v1"
+      LaunchTemplateData:
+        ImageId: ami-04b4f1a9cf54c11d0
+        InstanceType: t2.micro
+        SecurityGroupIds:
+          - !Ref SecurityGroup
+        KeyName: ecom
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        NetworkInterfaces:
+          - AssociatePublicIpAddress: true
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchTemplate:
+        LaunchTemplateName: !Ref AutoScalingLaunchTemplate
+        Version: "1"
+      MinSize: '2'
+      MaxSize: '4'
+      DesiredCapacity: '2'
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 300
+
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -288,78 +321,33 @@ Resources:
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
-      DisplayName: "Ecom Monitoring Alerts"
-
-  SNSTopicSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      TopicArn: !Ref SNSTopic
-      Protocol: email
-      Endpoint: "22ug2-0190M@sltc.edu.lk"
-
-  AutoScalingLaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateName: ecom-prod-launch-template
-      VersionDescription: "v1"
-      LaunchTemplateData:
-        ImageId: ami-04b4f1a9cf54c11d0
-        InstanceType: t2.micro
-        SecurityGroupIds:
-          - !Ref SecurityGroup
-        KeyName: ecom
-        IamInstanceProfile:
-          Arn: !GetAtt InstanceProfile.Arn
-        NetworkInterfaces:
-          - AssociatePublicIpAddress: true
-
-  AutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      LaunchTemplate:
-        LaunchTemplateName: !Ref AutoScalingLaunchTemplate
-        Version: "1"
-      MinSize: '2'
-      MaxSize: '4'
-      DesiredCapacity: '2'
-      TargetGroupARNs:
-        - !Ref ALBTargetGroup
-      HealthCheckType: EC2
-      HealthCheckGracePeriod: 300
-
-  ScaleUpPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref AutoScalingGroup
-      ScalingAdjustment: 1
-      Cooldown: 300
-      PolicyType: TargetTrackingScaling
-      TargetTrackingConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ASGAverageCPUUtilization
-        TargetValue: 75.0
-
-  ScaleDownPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref AutoScalingGroup
-      ScalingAdjustment: -1
-      Cooldown: 300
-      PolicyType: TargetTrackingScaling
-      TargetTrackingConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ASGAverageCPUUtilization
-        TargetValue: 40.0
+      DisplayName: Ecom Notifications
 
 Outputs:
+  VPCID:
+    Description: "VPC ID"
+    Value: !Ref VPC
+
+  PublicSubnet1ID:
+    Description: "Public Subnet 1 ID"
+    Value: !Ref PublicSubnet1
+
+  PublicSubnet2ID:
+    Description: "Public Subnet 2 ID"
+    Value: !Ref PublicSubnet2
+
+  PrivateSubnet1ID:
+    Description: "Private Subnet 1 ID"
+    Value: !Ref PrivateSubnet1
+
+  PrivateSubnet2ID:
+    Description: "Private Subnet 2 ID"
+    Value: !Ref PrivateSubnet2
+
   ALBURL:
-    Description: Application Load Balancer URL
-    Value: !GetAtt ALB.DNSName
-  DynamoDBTableName:
-    Description: Name of the DynamoDB Table
-    Value: ecom-prod-dynamodb
+    Description: "URL of the ALB"
+    Value: !Sub "http://${ALB.DNSName}"
+
+  AutoScalingGroupName:
+    Description: "AutoScaling Group Name"
+    Value: !Ref AutoScalingGroup
