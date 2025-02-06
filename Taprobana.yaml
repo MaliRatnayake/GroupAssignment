@@ -1,5 +1,4 @@
 AWSTemplateFormatVersion: '2010-09-09'
-# This is the final commit for proof
 
 Resources:
   VPC:
@@ -69,7 +68,6 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
-  # NAT Gateway for PublicSubnet1
   ElasticIPForNAT1:
     Type: AWS::EC2::EIP
     Properties:
@@ -84,7 +82,6 @@ Resources:
         - Key: Name
           Value: ecom-prod-nat-gateway-1
 
-  # NAT Gateway for PublicSubnet2
   ElasticIPForNAT2:
     Type: AWS::EC2::EIP
     Properties:
@@ -199,58 +196,68 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
 
-  EC2Instance1:
-    Type: AWS::EC2::Instance
+  AutoScalingLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      InstanceType: t2.micro
-      SecurityGroupIds:
-        - !Ref SecurityGroup
-      SubnetId: !Ref PrivateSubnet1
       ImageId: ami-04b4f1a9cf54c11d0
+      InstanceType: t2.micro
+      SecurityGroups:
+        - !Ref SecurityGroup
       KeyName: ecom
       IamInstanceProfile: !Ref InstanceProfile
+      AssociatePublicIpAddress: true
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchConfigurationName: !Ref AutoScalingLaunchConfiguration
+      MinSize: '2'
+      MaxSize: '5'
+      DesiredCapacity: '2'
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 300
+      LoadBalancerNames:
+        - !Ref ALB
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
       Tags:
         - Key: Name
-          Value: ecom-prod-instance-1
+          Value: ecom-prod-auto-scaling-group
+          PropagateAtLaunch: true
 
-  EC2Instance2:
-    Type: AWS::EC2::Instance
+  ScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
     Properties:
-      InstanceType: t2.micro
-      SecurityGroupIds:
-        - !Ref SecurityGroup
-      SubnetId: !Ref PrivateSubnet2
-      ImageId: ami-04b4f1a9cf54c11d0
-      KeyName: ecom
-      IamInstanceProfile: !Ref InstanceProfile
-      Tags:
-        - Key: Name
-          Value: ecom-prod-instance-2
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PolicyType: SimpleScaling
+      ScalingAdjustment: 1
+      Cooldown: 300
+      AdjustmentType: ChangeInCapacity
+      EstimatedInstanceWarmup: 300
+      MetricAggregationType: Average
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 75.0
 
-  DynamoDBTable:
-    Type: AWS::DynamoDB::Table
+  ScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
     Properties:
-      TableName: ecom-prod-dynamodb
-      AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: id
-          KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
-      SSESpecification:
-        SSEEnabled: true
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PolicyType: SimpleScaling
+      ScalingAdjustment: -1
+      Cooldown: 300
+      AdjustmentType: ChangeInCapacity
+      EstimatedInstanceWarmup: 300
+      MetricAggregationType: Average
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 40.0
 
-  VPCDynamoDBEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Properties:
-      VpcId: !Ref VPC
-      ServiceName: !Sub "com.amazonaws.${AWS::Region}.dynamodb"
-      VpcEndpointType: Gateway
-      RouteTableIds:
-        - !Ref RouteTablePrivate
-
-  ## CLOUDWATCH MONITORING ##
   CloudWatchAlarmEC2CPU:
     Type: AWS::CloudWatch::Alarm
     Properties:
