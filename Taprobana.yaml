@@ -308,8 +308,10 @@ Resources:
         SecurityGroupIds:
           - !Ref SecurityGroup
         KeyName: ecom
-        IamInstanceProfile: !Ref InstanceProfile
-        AssociatePublicIpAddress: true
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        NetworkInterfaces:
+          - AssociatePublicIpAddress: true
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
