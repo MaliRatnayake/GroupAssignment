@@ -250,13 +250,13 @@ Resources:
       RouteTableIds:
         - !Ref RouteTablePrivate
 
-  # Launch Configuration for Auto Scaling Group
+  # Launch Template
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: ecom-prod-launch-template
+      LaunchTemplateName: ecom-prod-launch-template  # Ensure this name is unique
       LaunchTemplateData:
-        ImageId: ami-04b4f1a9cf54c11d0  # Update with the correct AMI ID
+        ImageId: ami-04b4f1a9cf54c11d0  # Update with the correct AMI ID for your region
         InstanceType: t2.micro
         SecurityGroups:
           - !Ref SecurityGroup
@@ -268,7 +268,7 @@ Resources:
   # Auto Scaling Group
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: LaunchTemplate  # Ensure the Launch Template is created before the Auto Scaling Group
+    DependsOn: LaunchTemplate  # Ensure the Launch Template is created first
     Properties:
       MinSize: '2'  # Minimum number of instances
       MaxSize: '5'  # Maximum number of instances
@@ -277,8 +277,8 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       LaunchTemplate:
-        LaunchTemplateName: !Ref LaunchTemplate
-        Version: "1"  # Explicitly specify the version of the Launch Template
+        LaunchTemplateName: !Ref LaunchTemplate  # Dynamically reference the Launch Template
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber  # Use the latest version
       HealthCheckType: EC2
       HealthCheckGracePeriod: 300  # Time to wait before considering an instance unhealthy
       TargetGroupARNs:
