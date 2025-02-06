@@ -267,25 +267,25 @@ Resources:
 
   # Auto Scaling Group
   AutoScalingGroup:
-      Type: AWS::AutoScaling::AutoScalingGroup
-      Properties:
-        MinSize: '2'  # Minimum number of instances
-        MaxSize: '5'  # Maximum number of instances
-        DesiredCapacity: '2'  # Initial desired capacity
-        VPCZoneIdentifier:
-          - !Ref PrivateSubnet1
-          - !Ref PrivateSubnet2
-        LaunchTemplate:
-          LaunchTemplateName: !Ref LaunchTemplate
-          Version: "$Latest"  # Use the latest version of the Launch Template
-        HealthCheckType: EC2
-        HealthCheckGracePeriod: 300  # Time to wait before considering an instance unhealthy
-        TargetGroupARNs:
-          - !Ref ALBTargetGroup  # Associate with the ALB target group
-        Tags:
-          - Key: Name
-            Value: ecom-prod-auto-scaling-instance
-            PropagateAtLaunch: true
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: '2'  # Minimum number of instances
+      MaxSize: '5'  # Maximum number of instances
+      DesiredCapacity: '2'  # Initial desired capacity
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchTemplate:
+        LaunchTemplateName: !Ref LaunchTemplate
+        Version: "1"  # Explicitly specify the version of the Launch Template
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 300  # Time to wait before considering an instance unhealthy
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup  # Associate with the ALB target group
+      Tags:
+        - Key: Name
+          Value: ecom-prod-auto-scaling-instance
+          PropagateAtLaunch: true
 
   # Scaling Policy - Scale Up
   ScaleUpPolicy:
