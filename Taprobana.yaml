@@ -256,18 +256,19 @@ Resources:
       LaunchTemplateName: ecom-prod-launch-template
       VersionDescription: "v1"
       LaunchTemplateData:
-        ImageId: ami-04b4f1a9cf54c11d0  # Update with correct AMI ID
+        ImageId: ami-04b4f1a9cf54c11d0  # Update with the correct AMI ID
         InstanceType: t2.micro
         SecurityGroups:
           - !Ref SecurityGroup
         KeyName: ecom
         IamInstanceProfile:
-          Arn: !GetAtt InstanceProfile.Arn  # Use the InstanceProfile ARN (Correct format)
+          Arn: !GetAtt InstanceProfile.Arn  # Correct format for IAM Instance Profile
         UserData: !Base64 "your_base64_encoded_user_data"  # Optional: for instance configuration
 
   # Auto Scaling Group
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: LaunchTemplate  # Ensure the Launch Template is created before the Auto Scaling Group
     Properties:
       MinSize: '2'  # Minimum number of instances
       MaxSize: '5'  # Maximum number of instances
