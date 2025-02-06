@@ -261,7 +261,8 @@ Resources:
         SecurityGroups:
           - !Ref SecurityGroup
         KeyName: ecom
-        IamInstanceProfile: !Ref InstanceProfile
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn  # Use the InstanceProfile ARN (Correct format)
         UserData: !Base64 "your_base64_encoded_user_data"  # Optional: for instance configuration
 
   # Auto Scaling Group
