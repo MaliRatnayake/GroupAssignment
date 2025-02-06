@@ -1,4 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
+# This is the final commit 
 
 Resources:
   VPC:
@@ -98,93 +99,177 @@ Resources:
         - Key: Name
           Value: ecom-prod-nat-gateway-2
 
-  # Route Table for PrivateSubnet1 to use NAT Gateway 1
-  RouteTablePrivateWithNAT1:
+  RouteTablePrivate:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: ecom-prod-private-route-table-with-nat-1
+          Value: ecom-prod-private-route-table
 
-  RoutePrivateSubnet1ToNAT:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref RouteTablePrivateWithNAT1
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway1
-
-  RouteTableAssociationPrivateWithNAT1:
+  RouteTableAssociationPrivate1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet1
-      RouteTableId: !Ref RouteTablePrivateWithNAT1
+      RouteTableId: !Ref RouteTablePrivate
 
-  # Route Table for PrivateSubnet2 to use NAT Gateway 2
-  RouteTablePrivateWithNAT2:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: ecom-prod-private-route-table-with-nat-2
-
-  RoutePrivateSubnet2ToNAT:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref RouteTablePrivateWithNAT2
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway2
-
-  RouteTableAssociationPrivateWithNAT2:
+  RouteTableAssociationPrivate2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref RouteTablePrivateWithNAT2
+      RouteTableId: !Ref RouteTablePrivate
 
-  # ALB (Application Load Balancer)
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP and SSH
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+
+  IAMRoleForEC2:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ "ec2.amazonaws.com" ]
+            Action: [ "sts:AssumeRole" ]
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "dynamodb:*"
+                Resource: "*"
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref IAMRoleForEC2
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VPC
+      Protocol: HTTP
+      Port: 80
+      TargetType: instance
+      Targets:
+        - Id: !Ref EC2Instance1
+        - Id: !Ref EC2Instance2
+      HealthCheckPath: "/"
+
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: ecom-prod-alb
       Subnets:
-        - Ref: PublicSubnet1
-        - Ref: PublicSubnet2
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
       SecurityGroups:
-        - Ref: ALBSecurityGroup
-      LoadBalancerAttributes:
-        - Key: idle_timeout.timeout_seconds
-          Value: '60'
+        - !Ref SecurityGroup
+      Type: application
       Scheme: internet-facing
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  EC2Instance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      SubnetId: !Ref PrivateSubnet1
+      ImageId: ami-04b4f1a9cf54c11d0
+      KeyName: ecom
+      IamInstanceProfile: !Ref InstanceProfile
       Tags:
         - Key: Name
-          Value: ecom-prod-alb
+          Value: ecom-prod-instance-1
 
-  ALBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
+  EC2Instance2:
+    Type: AWS::EC2::Instance
     Properties:
-      GroupDescription: "Allow HTTP and HTTPS traffic"
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      SubnetId: !Ref PrivateSubnet2
+      ImageId: ami-04b4f1a9cf54c11d0
+      KeyName: ecom
+      IamInstanceProfile: !Ref InstanceProfile
+      Tags:
+        - Key: Name
+          Value: ecom-prod-instance-2
+
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ecom-prod-dynamodb
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+
+  VPCDynamoDBEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
       VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: '80'
-          ToPort: '80'
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: '443'
-          ToPort: '443'
-          CidrIp: 0.0.0.0/0
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.dynamodb"
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref RouteTablePrivate
 
-  # SNS Topic for CloudWatch Alarm Actions
-  SNSTopic:
-    Type: AWS::SNS::Topic
+  ## CLOUDWATCH MONITORING ##
+  CloudWatchAlarmEC2CPU:
+    Type: AWS::CloudWatch::Alarm
     Properties:
-      DisplayName: "CloudWatch Alarm Notifications"
-      Subscription:
-        - Protocol: email
-          Endpoint: "22ug2-0190M@sltc.edu.lk"  # Replace with your email address
+      AlarmDescription: "Triggers when EC2 CPU utilization exceeds 75%"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref EC2Instance1
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 75
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref SNSTopic
+      OKActions:
+        - !Ref SNSTopic
 
-  # CloudWatch Alarm for ALB Requests
   CloudWatchAlarmALBRequests:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -193,7 +278,7 @@ Resources:
       MetricName: RequestCount
       Dimensions:
         - Name: LoadBalancer
-          Value: !Sub "app/${ALB.LoadBalancerFullName}"
+          Value: !GetAtt ALB.LoadBalancerFullName
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 1
@@ -204,13 +289,22 @@ Resources:
       OKActions:
         - !Ref SNSTopic
 
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "Ecom Monitoring Alerts"
+
+  SNSTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SNSTopic
+      Protocol: email
+      Endpoint: "22ug2-0190M@sltc.edu.lk"
+
 Outputs:
   ALBURL:
     Description: Application Load Balancer URL
     Value: !GetAtt ALB.DNSName
-  EC2Instance1Id:
-    Description: "Instance ID of EC2 Instance in Private Subnet 1"
-    Value: !Ref EC2Instance1
-  EC2Instance2Id:
-    Description: "Instance ID of EC2 Instance in Private Subnet 2"
-    Value: !Ref EC2Instance2
+  DynamoDBTableName:
+    Description: Name of the DynamoDB Table
+    Value: ecom-prod-dynamodb
