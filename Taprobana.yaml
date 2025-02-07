@@ -159,6 +159,18 @@ Resources:
                 Action:
                   - "dynamodb:*"
                 Resource: "*"
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:PutObject"
+                  - "s3:ListBucket"
+                Resource:
+                  - !Sub "arn:aws:s3:::ecom-prod-s3-bucket"
+                  - !Sub "arn:aws:s3:::ecom-prod-s3-bucket/*"
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -391,6 +403,40 @@ Resources:
       Protocol: email
       Endpoint: "22ug2-0190M@sltc.edu.lk"
 
+  ## S3 BUCKET ##
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: ecom-prod-s3-bucket
+      AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: ecom-prod-s3-bucket
+
+  ## S3 VPC ENDPOINT ##
+  VPCS3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref RouteTablePrivate
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action:
+              - "s3:GetObject"
+              - "s3:PutObject"
+              - "s3:ListBucket"
+            Resource:
+              - !Sub "arn:aws:s3:::ecom-prod-s3-bucket"
+              - !Sub "arn:aws:s3:::ecom-prod-s3-bucket/*"
+
 Outputs:
   ALBURL:
     Description: Application Load Balancer URL
@@ -398,3 +444,6 @@ Outputs:
   DynamoDBTableName:
     Description: Name of the DynamoDB Table
     Value: ecom-prod-dynamodb
+  S3BucketName:
+    Description: Name of the S3 Bucket
+    Value: ecom-prod-s3-bucket
